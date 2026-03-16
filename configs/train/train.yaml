@@ -1,0 +1,113 @@
+# train_config.yaml
+
+output_dir: models/sample
+num_train_epochs: 1
+per_device_train_batch_size: 1  # same as micro batch
+per_device_eval_batch_size: 1
+gradient_accumulation_steps: 1
+learning_rate: 2.0e-5
+weight_decay: 0.0
+max_grad_norm: 1.0
+warmup_steps: 0
+lr_scheduler_type: constant                # select: cosine | cosine_with_restarts | polynomial | constant ...
+optim: adamw_torch                         # select: adamw_hf | adamw_torch | adafactor | paged_adamw_32bit | paged_adamw_8bit ..
+seed: 42
+
+mixed_precision: bf16                      # select: null | fp16 | bf16
+
+attn_implementation: flash_attention_2     # select: sdpa | flash_attention_2 | flash_attention_3 | eager | null
+
+distributed_type: deepspeed                # select: deepspeed | fsdp (Not Implemented) | null
+deepspeed: configs/deepspeed/default/ds_stage0.json     # select: path_to_config (configs/deepspeed/...) | null
+
+max_length: 1024
+
+# packing
+# Strategy for packing sequences.
+# "bfd" (best-fit decreasing, re-queues overflow tokens),
+# or "wrapped" (aggressive, cuts mid-sequence).
+
+# padding_free
+  # Whether to perform forward passes without padding by flattening all sequences
+  # in the batch into a single continuous sequence.
+  # Currently, this is only supported with FlashAttention 2 or 3, which can efficiently
+  # handle the flattened batch structure.
+  # When packing is enabled with strategy "bfd", padding-free is enabled regardless
+  # of the value of this parameter.
+
+# cross-document attention
+  # Previous implementations of packing did not consider example boundaries when using
+  # FlashAttention 2, leading to undesired cross-example attention that reduced quality
+  # and convergence.
+  # Hugging Face Transformers now addresses this with a new feature that maintains
+  # boundary awareness during packing.
+  # This is achieved through the flash_attn_varlen_func, which calculates the cumulative
+  # sequence lengths in each mini-batch (cu_seqlens).
+
+# note
+  # SFTTrainer supports example packing, where multiple examples are packed into the same
+  # input sequence up to the specified maximum length.
+  # As a result, a single training batch can contain more original examples than the
+  # user-specified batch size, since multiple examples are concatenated within each sequence.
+
+# references
+  # https://huggingface.co/docs/trl/en/sft_trainer
+  # https://huggingface.co/docs/trl/en/reducing_memory_usage#packing
+  # https://huggingface.co/blog/packing-with-FA2
+packing: True                   # enable or disable example packing
+packing_strategy: "bfd"          # select: bfd | wrapped (used when packing is enabled)
+padding_free: True              # enable padding-free forward pass (requires FlashAttention 2/3), (used when packing is enabled)
+
+assistant_only_loss: true # it works same as `completion_only_loss` for singe-turn dataset
+
+# evaluation / logging / saving
+do_train: true
+do_eval: true
+eval_strategy: steps      # select: steps | epoch
+eval_steps: 1
+logging_strategy: "steps"
+logging_steps: 1
+report_to:
+  - tensorboard
+  #- wandb
+save_strategy: "steps"
+save_steps: 500
+save_total_limit: null
+
+# gradient checkpointing
+gradient_checkpointing: true
+
+dataloader_num_workers: 0
+
+# peft
+qlora: true
+llmint8: false
+
+use_peft: true              # Set to true to enable LoRA (PEFT)
+peft_config:
+  r_dim: 16
+  lora_alpha: 32             # Common practice: set alpha == r_dim so that alpha/r = 1
+  lora_dropout: 0.1
+  save_with_merge: true      # If set to True, checkpoint merged with LoRA modules is saved.
+  enable_lora_fp32: true     # It is recommended to set this to true when using QLoRA or LLM.int8 for better accuracy.
+  # `modules_to_save`: 
+    # list of modules apart from LoRA layers to be set as trainable and saved in the final checkpoint. 
+    # These typically include model’s custom head that is randomly initialized for the fine-tuning task.
+
+    # Full fine-tuning is more costly in terms of VRAM or storage space but if all else fails, 
+    # you can fall back to this and see if it works for you. 
+    # Achieve it by adding the name of the embedding layer to modules_to_save. 
+    # Note that you need to add tied layers as well, e.g. lm_head.
+    # i.e., modules_to_save=["embed_tokens", "lm_head"]
+  modules_to_save: null 
+  # target_modules: [q_proj, k_proj]
+
+save_safetensors: True
+
+
+wandb_api_key: null
+wandb_project: null
+
+
+# ZeRO-3 resume checkpoint
+save_zero3_resume_checkpoint: false # Set to true if you plan to resume training in DeepSpeed ZeRO-3. otherwise, set to false.

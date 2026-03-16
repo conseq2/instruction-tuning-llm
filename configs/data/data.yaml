@@ -1,0 +1,10 @@
+# data_config.yaml
+data_path: data/sample_dialogue/multi_turn_dict.jsonl
+
+truncate: true
+valid_ratio: 0.2
+seed: 42
+shuffle: true
+
+# dataset map parallelism
+num_proc: 2
