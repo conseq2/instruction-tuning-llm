@@ -1,0 +1,23 @@
+# configuration
+omegaconf
+
+torch
+transformers
+datasets
+accelerate
+peft
+trl
+bitsandbytes
+deepspeed
+
+# build helper for flash attention
+# numpy
+# psutil
+# ninja
+# flash-attn
+
+# logging
+loguru
+tensorboard
+setuptools==81.0 # for tensorboard
+wandb
