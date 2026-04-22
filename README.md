@@ -1,43 +1,45 @@
 # LLM Instruction Tuning
 
-This repository provides a framework for instruction tuning Large Language Models. It is designed to handle multi-GPU training environments and efficient fine-tuning using parameter-efficient methods.
+This repository is a training pipeline for language models. It currently supports instruction tuning, and we plan to expand it to cover a broader range of post-training methods such as RLHF, RLVR, DPO, and so on.
+
+## What This Repository Provides
+
+This repository provides a configurable training pipeline for language model post-training.
+It currently supports instruction tuning with LoRA, QLoRA, and LLM.int8-based PEFT.
+It also includes DeepSpeed-based multi-GPU training, assistant-only loss, and flexible checkpoint export options.
 
 ## Features
 
-*   **Distributed Training**: Support for training via DeepSpeed (ZeRO stages 0, 1, 2, and 3).
+*   **Distributed Training**: Supports DeepSpeed training with ZeRO stages 0, 1, 2, and 3. Currently, only multi-GPU training on a single node is supported, with multi-node support planned for the future.
 *   **PEFT Support**: Supports LoRA, QLoRA (4-bit), and LLM.int8 (8-bit) fine-tuning.
 *   **Assistant-only Loss**: Calculates training loss only on assistant responses by masking user prompts and system instructions based on chat templates.
+    *   For supervised fine-tuning, we recommend applying the loss only to assistant tokens so that the model learns to generate responses rather than reproduce user prompts or system instructions, following the standard SFT objective:
+        ```math
+        \mathcal{L}_{\mathrm{SFT}}(\theta) = -\mathbb{E}_{(x, y) \sim \mathcal{D}} \sum_{t=1}^{T} \log \pi_{\theta}(y_t \mid x, y_{<t})
+        ```
     *   Requirement: This feature requires a Jinja2 chat template containing `{% generation %}` and `{% endgeneration %}` tags.
     *   Reference: Please refer to the "Train on assistant messages only" section in the [Hugging Face TRL Documentation](https://huggingface.co/docs/trl/sft_trainer#train-on-assistant-messages-only).
-*   **Data Packing**: Supports Best-Fit Decreasing (BFD) and Wrapped strategies to pack multiple samples into a single sequence length to maximize training throughput.
 
-## Technical Implementation Details
+## Quick Start
 
-### 1. Precision and Dtype Policy
-To ensure numerical stability during mixed-precision training (especially with QLoRA/LLM.int8), the framework implements a specific precision policy:
-*   **FP32 Adapter Weights**: When using quantized base models (4-bit/8-bit), the framework automatically captures and restores LoRA adapter weights in FP32. This prevents "unscaling errors" often encountered in FP16/BF16 mixed-precision setups.
+Single-GPU:
+```bash
+bash scripts/run_single_gpu_train.sh
+```
 
-### 2. Data Pipeline and Validation
-The `DataPipeline` class performs strict validation on the input dataset:
-*   **Role Alternation**: Ensures dialogues strictly follow the `User -> Assistant` or `System -> User -> Assistant` pattern.
-*   **Truncation Logic**: Implements prompt-aware truncation. If a sequence exceeds `max_length`, it reduces the assistant's response first to preserve the context of the user's instructions.
-*   **Pre-conversion**: Automatically converts simple list-style JSONL files into the standard `{"messages": [...]}` dictionary format.
+Multi-GPU:
+```bash
+bash scripts/run_multi_gpu_train.sh
+```
 
-### 3. Distributed Synchronization and Initialization
-*   **Race Condition Prevention**: Uses `local_main_process_first()` context managers during data tokenization and preprocessing to prevent multiple processes from simultaneously writing to the dataset cache.
-*   **Initialization Order**: Strictly initializes `TrainingArguments` before model instantiation to ensure DeepSpeed ZeRO-3 or FSDP engine hooks are properly applied during the model loading phase.
-
-### 4. DeepSpeed ZeRO-3 Handling
-The framework includes specialized utilities for DeepSpeed ZeRO-3, where model weights are partitioned across all available GPUs:
-*   **Automated Weight Gathering**: On model save, the framework collects partitioned shards from all ranks to create a single consolidated checkpoint.
-*   **LoRA Merging**: For PEFT training, the framework handles merging the trained adapters back into the base model during the save process.
+Update `configs/models/`, `configs/data/`, and `configs/train/` before running to match your setup.
 
 ## Future Work
 
 *   **FSDP Support**: Full support for Fully Sharded Data Parallel (FSDP).
 *   **Multi-node Support**: Scaling beyond a single machine.
-*   **Preference Tuning**: Support for DPO (Direct Preference Optimization) and ORPO.
-*   **RLHF**: Reinforcement Learning from Human Feedback.
+*   **Preference Tuning**: Support for DPO, ORPO, and others.
+*   **RL**: Support for PPO, GRPO, DAPO, and others.
 
 ## Project Structure
 
@@ -58,7 +60,7 @@ The framework includes specialized utilities for DeepSpeed ZeRO-3, where model w
 
 ## Dataset Format
 
-The pipeline expects JSONL format. Refer to `data/sample_dialogue/` for examples.
+The pipeline expects JSONL input. Refer to `data/sample_dialogue/` for more examples.
 
 ### Single-turn Example
 ```json
@@ -69,6 +71,16 @@ The pipeline expects JSONL format. Refer to `data/sample_dialogue/` for examples
 ```json
 {"messages": [{"role": "user", "content": "Who is the author of 'Dragon Raja'?"}, {"role": "assistant", "content": "The author is Yeong-do Lee."}, {"role": "user", "content": "What is his other famous work?"}, {"role": "assistant", "content": "He also wrote 'The Bird That Drinks Tears'."}]}
 ```
+
+## PEFT Configuration Details
+
+PEFT-related options can be configured in `configs/train/train.yaml`.
+
+### Merge option
+Set `peft_config.save_with_merge: true` to export a checkpoint with the trained LoRA adapters merged into the base model. If disabled, the repository saves the adapter weights separately.
+
+### LoRA module precision
+TRL may implicitly cast LoRA adapter weights when training with QLoRA or LLM.int8. To make this behavior explicit and configurable, this repository allows users to set the adapter precision through `peft_config.enable_lora_fp32`.
 
 ## Installation
 
@@ -103,3 +115,9 @@ For multi-GPU setups, adjust the `CUDA_VISIBLE_DEVICES` and `ACCELERATE_CFG` in 
 ```bash
 bash run_multi_gpu_train.sh
 ```
+
+## Training Summary
+
+<p align="center">
+  <img src="assets/TrainingSummary.png" alt="Training Summary" />
+</p>
