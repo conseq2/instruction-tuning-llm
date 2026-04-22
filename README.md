@@ -13,12 +13,14 @@ It also includes DeepSpeed-based multi-GPU training, assistant-only loss, and fl
 *   **Distributed Training**: Supports DeepSpeed training with ZeRO stages 0, 1, 2, and 3. Currently, only multi-GPU training on a single node is supported, with multi-node support planned for the future.
 *   **PEFT Support**: Supports LoRA, QLoRA (4-bit), and LLM.int8 (8-bit) fine-tuning.
 *   **Assistant-only Loss**: Calculates training loss only on assistant responses by masking user prompts and system instructions based on chat templates.
-    *   For supervised fine-tuning, we recommend applying the loss only to assistant tokens so that the model learns to generate responses rather than reproduce user prompts or system instructions, following the standard SFT objective:
-        ```math
-        \mathcal{L}_{\mathrm{SFT}}(\theta) = -\mathbb{E}_{(x, y) \sim \mathcal{D}} \sum_{t=1}^{T} \log \pi_{\theta}(y_t \mid x, y_{<t})
-        ```
-    *   Requirement: This feature requires a Jinja2 chat template containing `{% generation %}` and `{% endgeneration %}` tags.
-    *   Reference: Please refer to the "Train on assistant messages only" section in the [Hugging Face TRL Documentation](https://huggingface.co/docs/trl/sft_trainer#train-on-assistant-messages-only).
+     * For supervised fine-tuning, we recommend applying the loss only to assistant tokens so that the model learns to generate responses rather than reproduce user prompts or system instructions, following the standard SFT objective:
+
+    $$
+    \mathcal{L}_{\mathrm{SFT}}(\theta) = -\mathbb{E}_{(x, y) \sim \mathcal{D}} \sum_{t=1}^{T} \log \pi_{\theta}(y_t \mid x, y_{<t})
+    $$
+
+     * Requirement: This feature requires a Jinja2 chat template containing `{% generation %}` and `{% endgeneration %}` tags.
+     * Reference: Please refer to the "Train on assistant messages only" section in the [Hugging Face TRL Documentation](https://huggingface.co/docs/trl/sft_trainer#train-on-assistant-messages-only).
 
 ## Quick Start
 
